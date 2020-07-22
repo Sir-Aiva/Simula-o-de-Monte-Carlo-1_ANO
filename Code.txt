@@ -1,0 +1,112 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <math.h>
+#include <time.h>
+
+//variáveis globais
+long long points_circ = 0;      //pontos na circunferencia para uma só thread
+int sum_points_circ = 0;  //total de pontos na circunferencia
+int points_per_thread = 0;
+int pcirc[8] = {};         //lista de retorn de points_circ das threads
+float tempo;
+time_t t_ini, t_fim;
+
+ 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+//função gera pontos (função associada à thread)
+void* create_points (void* arg)
+{
+  int points_per_thread = *(int*) arg;
+  
+  double x,y;
+
+  //Bloquear points_circ para thrad "l"
+  pthread_mutex_lock(&mutex);
+
+  void* points_circ = 0;
+
+  for(long i=0; i< points_per_thread; i++){
+    //Gerar dois números x,y aleatórios entre -1 e 1
+    x = (rand()/(double)(RAND_MAX)) * 2 - 1;
+    y = (rand()/(double)(RAND_MAX)) * 2 - 1;
+
+    //Considerando as coordenadas do centro (0,0)
+    if(sqrt(x*x + y*y) <= 1)
+    {
+      points_circ ++;
+    }
+  }
+  //Desbloquear points_circ para thrad "l"
+  pthread_mutex_unlock(&mutex);
+  //printf("Pontos na circunferencia na função: %d\n",points_circ);
+  return (void*)points_circ;
+}
+
+int main(void) {
+
+  long points[5] = {500, 20000, 100000, 1000000, 10000000};      
+  int threads[4] = {2,4,6,8};
+  
+  //Por cada valor de pontos a ser gerados
+  for(int i=0; i<5; i++)  
+  {
+    //Por cada nº de threads a usar
+    for(int j=0; j<4; j++)
+    {
+      float total_points = points[i]; 
+      int num_threads = threads[j];
+
+      t_ini = time(NULL);
+      sum_points_circ =0;
+
+      printf("\nUsando %d threads para %d pontos:\n",threads[j],points[i]);
+      
+      //Pontos que cada thread vai criar
+      points_per_thread = points[i] / num_threads;
+
+      printf("Pontos por thread =  %d \n",points_per_thread);
+      //printf("Nº threads =  %d \n",num_threads);
+
+      //Total da distribuição inicial de pontos por thread
+      int sum_points_per_thread = points_per_thread * threads[j];
+      
+      //Calculo dos pontos que sobram (restos da divisão)
+      int points_left = points[i] - sum_points_per_thread;
+      
+      pthread_t tid[j];
+      float arrayId[j];
+
+      //Criação das threads
+      for(int l=0; l < num_threads; l++){
+        //printf("thread %d iniciada com %d pontos\n",l, points_per_thread);
+        pthread_create (&tid[l], NULL, &create_points, &points_per_thread);
+      }
+
+      //Terminar threads
+      for(int l=0; l < num_threads; l++){
+        void* ptr;
+        pthread_join(tid[l], &ptr);
+        long long circ = (long long)ptr;
+        pcirc[l] =  circ;
+      }
+
+      printf("Pontos na circunferencia por Thread(s): ");
+      //Total de pontos na circunferencia
+      for(int k=0; k < num_threads; k++){
+        printf(" %d", pcirc[k]);
+        sum_points_circ = sum_points_circ + pcirc[k];
+      }
+      printf("\nValor de Soma Pontos na Curcunf. =  %d \n",sum_points_circ);
+    
+      //Calculo de estimativa de pi
+      float pi = ((float)sum_points_circ / total_points) * 4; 
+      t_fim = time(NULL);
+      long long tempo = t_fim-t_ini;
+
+      printf(">> Valor de pi aprox. é %f, calculado com %d threads em %lu seg. << \n",pi,threads[j],tempo);
+      printf(">> Dos %d, usados, sobraram %d. << \n",points[i],points_left);
+    }
+  }
+}
